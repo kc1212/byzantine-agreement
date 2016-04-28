@@ -18,11 +18,11 @@ public class Byzantine
     private List<Tuple<Integer, Integer>> msgsN;
     private List<Tuple<Integer, Integer>> msgsP;
 
-    private final int n, f;
+    private final int id, n, f;
     private final List<String> addrs;
 
     private enum MsgType {
-        NOTIFICATION,
+        NOTIFICA,
         PROPOSAL
     }
 
@@ -38,9 +38,10 @@ public class Byzantine
         }
     }
 
-    public Byzantine(int _n, int _f, int _v, List<String> _addrs) throws RemoteException {
+    public Byzantine(int _id, int _n, int _f, int _v, List<String> _addrs) throws RemoteException {
         round = 0;
         decided = false;
+        id = _id;
         n = _n;
         f = _f;
         v = _v;
@@ -49,28 +50,25 @@ public class Byzantine
         msgsP = new ArrayList<>();
 
         assert addrs.size() == n;
-    }
-
-    private void await(List<Tuple<Integer, Integer>> msgs, Integer count)
-            throws InterruptedException {
-        // FIXME this does not work, Java parameters are passed by value
-        while (true) {
-            synchronized (msgs) {
-                if (msgs.stream().filter(p -> p.r == round).count() > count)
-                    break;
-            }
-            Thread.sleep(100);
-        }
+        System.out.printf("%d initiated with v = %d\n", id, v);
     }
 
     public void run()
             throws RemoteException, MalformedURLException, InterruptedException {
         Random rn = new Random();
         for (;;) {
-            /* NOTIFICATION PHASE */
+            /* NOTIFICA PHASE */
 
-            bcast(MsgType.NOTIFICATION, round, v);
-            await(msgsN, n - f);
+            bcast(MsgType.NOTIFICA, round, v);
+
+            // await n - f messages in the form of (N, r, *)
+            while (true) {
+                synchronized (msgsN) {
+                    if (msgsN.stream().filter(p -> p.r == round).count() > n - f)
+                        break;
+                }
+                Thread.sleep(100);
+            }
 
             /* PROPOSAL PHASE */
 
@@ -85,7 +83,14 @@ public class Byzantine
             if (decided)
                 break;
 
-            await(msgsP, n - f);
+            // await n - f messages in the form of (P, r, *)
+            while (true) {
+                synchronized (msgsP) {
+                    if (msgsP.stream().filter(p -> p.r == round).count() > n - f)
+                        break;
+                }
+                Thread.sleep(100);
+            }
 
             /* DECISION PHASE */
 
@@ -120,6 +125,7 @@ public class Byzantine
 
     private void bcast(MsgType type, int r, int w)
             throws RemoteException, MalformedURLException {
+        System.out.printf("%d -> (%s, r: %d, w: %d)\n", id, type.toString(), r, w);
         for (String addr : addrs) {
             try {
                 send(type, addr, r, w);
@@ -135,12 +141,10 @@ public class Byzantine
 
         Byzantine_RMI remote = (Byzantine_RMI) Naming.lookup(dest);
 
-        if (type == MsgType.NOTIFICATION) {
-            System.out.printf("Sending (N, %d, %d) to %s\n", r, w, dest);
+        if (type == MsgType.NOTIFICA) {
             remote.recvNotification(r, w);
 
         } else if (type == MsgType.PROPOSAL) {
-            System.out.printf("Sending (P, %d, %d) to %s\n", r, w, dest);
             remote.recvProposal(r, w);
 
         } else {
@@ -148,14 +152,13 @@ public class Byzantine
         }
     }
 
-
     private synchronized void prepareNewRound() {
         msgsN = filterMsgList(msgsN, round);
         msgsP = filterMsgList(msgsP, round);
     }
 
-    private static void decide(int w) {
-        System.out.printf("I decided on %d!\n", w);
+    private void decide(int w) {
+        System.out.printf("I (%d) decided on %d!\n", id, w);
     }
 
     private static List<Tuple<Integer, Integer>> filterMsgList(List<Tuple<Integer, Integer>> msgs, Integer r) {
