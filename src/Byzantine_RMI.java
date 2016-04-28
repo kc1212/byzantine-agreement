@@ -9,7 +9,7 @@ public interface Byzantine_RMI extends java.rmi.Remote {
             this.w = w;
         }
     }
-    void recvNotification() throws RemoteException;
-    void recvProposal() throws RemoteException;
+    void recvNotification(int r, int w) throws RemoteException;
+    void recvProposal(int r, int w) throws RemoteException;
 
 }
