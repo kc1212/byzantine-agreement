@@ -18,11 +18,10 @@ public class Byzantine_Main {
 
     static void usage() {
         System.err.println("Invalid argument!");
-        System.err.println("usage: java Byzantine_Main <n> <f> [<omission|random>]");
+        System.err.println("usage: java Byzantine_Main <n> <f> [<omission|random|both>]");
     }
 
     public static void main(String args[]) {
-        // java Byzantine_Main.class <n> <f>
         if (args.length <= 3) {
             int n = Integer.parseInt(args[0]);
             int f = Integer.parseInt(args[1]);
@@ -34,6 +33,8 @@ public class Byzantine_Main {
                     type = Byzantine.FailureType.OMISSION;
                 } else if (args[2].compareToIgnoreCase(Byzantine.FailureType.RANDOM.toString()) == 0) {
                     type = Byzantine.FailureType.RANDOM;
+                } else if (args[2].compareToIgnoreCase(Byzantine.FailureType.BOTH.toString()) == 0) {
+                    type = Byzantine.FailureType.BOTH;
                 } else {
                     usage();
                     return;
@@ -47,7 +48,7 @@ public class Byzantine_Main {
                 final Byzantine.FailureType Type = i < f ? type : Byzantine.FailureType.NOFAILURE;
                 Runnable task = () -> {
                     try {
-                        int v = Math.abs((new Random()).nextInt() % 2);
+                        int v = (new Random()).nextInt(2);
                         Byzantine byz = new Byzantine(I, n, f, v, addrs, Type);
                         Naming.rebind(addrs.get(I), byz);
                         Thread.sleep(2); // wait for other nodes to come online
@@ -60,8 +61,7 @@ public class Byzantine_Main {
                 new Thread(task).start();
             }
         } else {
-            System.err.println("Invalid argument!");
-            System.err.println("usage: java Byzantine_Main <n> <f> [<omission|random>]");
+            usage();
             return;
         }
     }

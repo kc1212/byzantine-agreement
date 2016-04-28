@@ -30,7 +30,8 @@ public class Byzantine
     public enum FailureType {
         NOFAILURE,
         OMISSION,
-        RANDOM
+        RANDOM,
+        BOTH
     }
 
     static class MajTally {
@@ -63,16 +64,24 @@ public class Byzantine
         Random rn = new Random();
         for (;;) {
             // artificial delay up to 1 second
-            Thread.sleep(Math.abs(rn.nextInt() % 1000));
+            Thread.sleep(rn.nextInt(1000));
 
             /* NOTIFICA PHASE */
 
-            // do different things depending on the type of the node
             if (type == FailureType.OMISSION) {
                 // do nothing
+
             } else if (type == FailureType.RANDOM) {
-                // TODO
+                // broadcast random value
+                bcast(MsgType.NOTIFICA, round, rn.nextInt(2));
+
+            } else if (type == FailureType.BOTH) {
+                // broadcast random value half of the time
+                if (rn.nextInt(2) == 0)
+                    bcast(MsgType.NOTIFICA, round, rn.nextInt(2));
+
             } else {
+                // operate usually
                 bcast(MsgType.NOTIFICA, round, v);
             }
 
@@ -89,12 +98,20 @@ public class Byzantine
 
             MajTally proposalRes = getMajTally(msgsN, round);
 
-            // do different things depending on the type of the node
             if (type == FailureType.OMISSION) {
                 // do nothing
+
             } else if (type == FailureType.RANDOM) {
-                // TODO
+                // broadcast random value
+                bcast(MsgType.PROPOSAL, round, rn.nextInt(3) - 1);
+
+            } else if (type == FailureType.BOTH) {
+                // broadcast random value half of the time
+                if (rn.nextInt(2) == 0)
+                    bcast(MsgType.PROPOSAL, round, rn.nextInt(3) - 1);
+
             } else {
+                // operate usually
                 if (proposalRes.tally > (n + f) / 2) {
                     bcast(MsgType.PROPOSAL, round, proposalRes.maj);
                 } else {
@@ -125,7 +142,7 @@ public class Byzantine
                     decided = true;
                 }
             } else {
-                v = Math.abs(rn.nextInt() % 2);
+                v = rn.nextInt(2);
             }
 
             prepareNewRound();
@@ -147,7 +164,7 @@ public class Byzantine
 
     private void bcast(MsgType type, int r, int w)
             throws RemoteException, MalformedURLException {
-        System.out.printf("%d -> (%s, r: %d, w: %d)\n", id, type.toString(), r, w);
+        System.out.printf("%d -> (%s, r: %d, w: %2d)\n", id, type.toString(), r, w);
         for (String addr : addrs) {
             try {
                 send(type, addr, r, w);
