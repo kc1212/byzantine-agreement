@@ -62,6 +62,9 @@ public class Byzantine
             throws RemoteException, MalformedURLException, InterruptedException {
         Random rn = new Random();
         for (;;) {
+            // artificial delay up to 1 second
+            Thread.sleep(Math.abs(rn.nextInt() % 1000));
+
             /* NOTIFICA PHASE */
 
             // do different things depending on the type of the node
@@ -177,7 +180,7 @@ public class Byzantine
     }
 
     private void decide(int w) {
-        System.out.printf("I (%d) decided on %d!\n", id, w);
+        System.out.printf(">>> Node %d DECIDED on %d <<<\n", id, w);
     }
 
     private static List<Tuple<Integer, Integer>> filterMsgList(List<Tuple<Integer, Integer>> msgs, Integer r) {
