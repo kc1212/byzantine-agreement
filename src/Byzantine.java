@@ -20,10 +20,17 @@ public class Byzantine
 
     private final int id, n, f;
     private final List<String> addrs;
+    private final FailureType type;
 
-    private enum MsgType {
+    public enum MsgType {
         NOTIFICA,
         PROPOSAL
+    }
+
+    public enum FailureType {
+        NOFAILURE,
+        OMISSION,
+        RANDOM
     }
 
     static class MajTally {
@@ -33,24 +40,22 @@ public class Byzantine
             this.maj = maj;
             this.tally = tally;
         }
-        public void println() {
-            System.out.printf("Maj: %d, Tally: %l\n", maj, tally);
-        }
     }
 
-    public Byzantine(int _id, int _n, int _f, int _v, List<String> _addrs) throws RemoteException {
+    public Byzantine(int id, int n, int f, int v, List<String> _addrs, FailureType type) throws RemoteException {
         round = 0;
         decided = false;
-        id = _id;
-        n = _n;
-        f = _f;
-        v = _v;
+        this.id = id;
+        this.n = n;
+        this.f = f;
+        this.v = v;
         addrs = new ArrayList<>(_addrs);
         msgsN = new ArrayList<>();
         msgsP = new ArrayList<>();
+        this.type = type;
 
         assert addrs.size() == n;
-        System.out.printf("%d initiated with v = %d\n", id, v);
+        System.out.printf("%d initiated with v = %d, type = %s\n", id, v, type.toString());
     }
 
     public void run()
@@ -59,12 +64,19 @@ public class Byzantine
         for (;;) {
             /* NOTIFICA PHASE */
 
-            bcast(MsgType.NOTIFICA, round, v);
+            // do different things depending on the type of the node
+            if (type == FailureType.OMISSION) {
+                // do nothing
+            } else if (type == FailureType.RANDOM) {
+                // TODO
+            } else {
+                bcast(MsgType.NOTIFICA, round, v);
+            }
 
             // await n - f messages in the form of (N, r, *)
             while (true) {
                 synchronized (msgsN) {
-                    if (msgsN.stream().filter(p -> p.r == round).count() > n - f)
+                    if (msgsN.stream().filter(p -> p.r == round).count() >= n - f)
                         break;
                 }
                 Thread.sleep(100);
@@ -74,10 +86,17 @@ public class Byzantine
 
             MajTally proposalRes = getMajTally(msgsN, round);
 
-            if (proposalRes.tally > (n + f) / 2)  {
-                bcast(MsgType.PROPOSAL, round, proposalRes.maj);
+            // do different things depending on the type of the node
+            if (type == FailureType.OMISSION) {
+                // do nothing
+            } else if (type == FailureType.RANDOM) {
+                // TODO
             } else {
-                bcast(MsgType.PROPOSAL, round, -1);
+                if (proposalRes.tally > (n + f) / 2) {
+                    bcast(MsgType.PROPOSAL, round, proposalRes.maj);
+                } else {
+                    bcast(MsgType.PROPOSAL, round, -1);
+                }
             }
 
             if (decided)
@@ -86,7 +105,7 @@ public class Byzantine
             // await n - f messages in the form of (P, r, *)
             while (true) {
                 synchronized (msgsP) {
-                    if (msgsP.stream().filter(p -> p.r == round).count() > n - f)
+                    if (msgsP.stream().filter(p -> p.r == round).count() >= n - f)
                         break;
                 }
                 Thread.sleep(100);
@@ -103,7 +122,7 @@ public class Byzantine
                     decided = true;
                 }
             } else {
-                v = rn.nextInt() % 2;
+                v = Math.abs(rn.nextInt() % 2);
             }
 
             prepareNewRound();
