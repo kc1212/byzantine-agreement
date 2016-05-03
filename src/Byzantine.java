@@ -34,6 +34,15 @@ public class Byzantine
         BOTH
     }
 
+    static class Tuple<X, Y> {
+        public final X r;
+        public final Y w;
+        public Tuple(X r, Y w) {
+            this.r = r;
+            this.w = w;
+        }
+    }
+
     static class MajTally {
         public final int maj;
         public final long tally;
@@ -150,15 +159,17 @@ public class Byzantine
         }
     }
 
-    public void recvNotification(int r, int w) throws RemoteException {
-        synchronized (msgsN) {
-            msgsN.add(new Tuple<>(r, w));
-        }
-    }
-
-    public void recvProposal(int r, int w) throws RemoteException {
-        synchronized (msgsP) {
-            msgsP.add(new Tuple<>(r, w));
+    public void handleMsg(MsgType type, int r, int w) throws RemoteException {
+        if (type == MsgType.NOTIFICA) {
+            synchronized (msgsN) {
+                msgsN.add(new Tuple<>(r, w));
+            }
+        } else if (type == MsgType.PROPOSAL) {
+            synchronized (msgsP) {
+                msgsP.add(new Tuple<>(r, w));
+            }
+        } else {
+            throw new RemoteException("Invalid Msg Type!");
         }
     }
 
@@ -177,18 +188,8 @@ public class Byzantine
 
     private static void send(MsgType type, String dest, int r, int w)
             throws RemoteException, MalformedURLException, NotBoundException {
-
         Byzantine_RMI remote = (Byzantine_RMI) Naming.lookup(dest);
-
-        if (type == MsgType.NOTIFICA) {
-            remote.recvNotification(r, w);
-
-        } else if (type == MsgType.PROPOSAL) {
-            remote.recvProposal(r, w);
-
-        } else {
-            throw new RemoteException("Invalid Msg Type!");
-        }
+        remote.handleMsg(type, r, w);
     }
 
     private synchronized void prepareNewRound() {
@@ -204,7 +205,6 @@ public class Byzantine
         return msgs.stream().filter(p -> p.r != r).collect(Collectors.toList());
     }
 
-    // TODO one could make a more general version of this instead of 0 or 1
     private static MajTally getMajTally(List<Tuple<Integer, Integer>> wrs, Integer r) {
         long tally0 = getTallyOf(wrs, 0, r);
         long tally1 = getTallyOf(wrs, 1, r);
