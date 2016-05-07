@@ -19,7 +19,8 @@ public class Byzantine_Main {
 
     static void usage() {
         System.err.println("Invalid argument!");
-        System.err.println("usage: java Byzantine_Main \n\t<single|multi> <n> <f> <id - only for single mode> [<omission|random|both>]");
+        System.err.println("usage:\tjava Byzantine_Main single <n> <f> <id> [<omission|random|both>]\n" +
+                              "or:\tjava Byzantine_Main multi  <n> <f>      [<omission|random|both>]");
     }
 
     static void startByzantine(int n, int f, List<String> addrs, int i, Byzantine.FailureType type) {
@@ -73,7 +74,7 @@ public class Byzantine_Main {
         }
     }
 
-    static void handleMultiple(String args[]) {
+    static void handleMulti(String args[]) {
         try {
             int n = Integer.parseInt(args[0]);
             int f = Integer.parseInt(args[1]);
@@ -105,7 +106,7 @@ public class Byzantine_Main {
 
     public static void main(String args[]) {
         if (args[0].compareToIgnoreCase("multi") == 0) {
-            handleMultiple(pop(args));
+            handleMulti(pop(args));
         } else if (args[0].compareToIgnoreCase("single") == 0) {
             handleSingle(pop(args));
         } else {
