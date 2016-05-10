@@ -12,6 +12,10 @@ public class Byzantine
         extends UnicastRemoteObject
         implements Byzantine_RMI {
 
+    public static final String ANSI_RESET = "\u001B[0m";
+    public static final String ANSI_RED = "\u001B[31m";
+    public static final String ANSI_GREEN = "\u001B[32m";
+
     private int round;
     private boolean decided;
     private int v;
@@ -72,10 +76,10 @@ public class Byzantine
             throws RemoteException, MalformedURLException, InterruptedException {
         Random rn = new Random();
         for (;;) {
-            // artificial delay up to 1 second
-            Thread.sleep(rn.nextInt(1000));
+            // artificial delay up to 100 ms
+            Thread.sleep(rn.nextInt(100));
 
-            /* NOTIFICA PHASE */
+            /* NOTIFICATION PHASE */
 
             if (type == FailureType.OMISSION) {
                 // do nothing
@@ -104,8 +108,11 @@ public class Byzantine
             }
 
             /* PROPOSAL PHASE */
-
-            MajTally proposalRes = getMajTally(msgsN, round);
+            MajTally proposalRes;
+            synchronized (msgsN) {
+                printBufferSize(MsgType.NOTIFICA, msgsN);
+                proposalRes = getMajTally(msgsN, round);
+            }
 
             if (type == FailureType.OMISSION) {
                 // do nothing
@@ -142,7 +149,11 @@ public class Byzantine
 
             /* DECISION PHASE */
 
-            MajTally decisionRes = getMajTally(msgsP, round);
+            MajTally decisionRes;
+            synchronized (msgsP) {
+                printBufferSize(MsgType.PROPOSAL, msgsP);
+                decisionRes = getMajTally(msgsP, round);
+            }
 
             if (decisionRes.tally > f) {
                 v = decisionRes.maj;
@@ -157,6 +168,11 @@ public class Byzantine
             prepareNewRound();
             round++;
         }
+    }
+
+    private void printBufferSize(MsgType type, List<Tuple<Integer, Integer>> msgs) {
+        long cnt = msgs.stream().filter(p -> p.r == round).count();
+        System.out.printf("%s%d -> (Recv %s, r: %4d, n: %4d)%s\n", ANSI_GREEN, id, type.toString(), round, cnt, ANSI_RESET);
     }
 
     public void handleMsg(MsgType type, int r, int w) throws RemoteException {
@@ -175,7 +191,7 @@ public class Byzantine
 
     private void bcast(MsgType type, int r, int w)
             throws RemoteException, MalformedURLException {
-        System.out.printf("%d -> (%s, r: %d, w: %2d)\n", id, type.toString(), r, w);
+        System.out.printf("%d -> (Send %s, r: %4d, w: %4d)\n", id, type.toString(), r, w);
         for (String addr : addrs) {
             try {
                 send(type, addr, r, w);
@@ -198,7 +214,7 @@ public class Byzantine
     }
 
     private void decide(int w) {
-        System.out.printf(">>> Node %d DECIDED on %d <<<\n", id, w);
+        System.out.printf("%s>>> Node %d DECIDED on %d in round %d<<<%s\n", ANSI_RED, id, w, round, ANSI_RESET);
     }
 
     private static List<Tuple<Integer, Integer>> filterMsgList(List<Tuple<Integer, Integer>> msgs, Integer r) {

@@ -105,6 +105,11 @@ public class Byzantine_Main {
     }
 
     public static void main(String args[]) {
+        if (args.length < 3) {
+            usage();
+            return;
+        }
+
         if (args[0].compareToIgnoreCase("multi") == 0) {
             handleMulti(pop(args));
         } else if (args[0].compareToIgnoreCase("single") == 0) {
