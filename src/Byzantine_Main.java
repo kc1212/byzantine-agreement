@@ -18,9 +18,13 @@ public class Byzantine_Main {
     }
 
     static void usage() {
+        String str = Byzantine.FailureType.OMISSION.toString() + "|"
+                + Byzantine.FailureType.RANDOM_SIMPLE.toString() + "|"
+                + Byzantine.FailureType.RANDOM_COMPLEX.toString() + "|"
+                + Byzantine.FailureType.BOTH.toString();
         System.err.println("Invalid argument!");
-        System.err.println("usage:\tjava Byzantine_Main single <n> <f> <id> [<omission|random|both>]\n" +
-                              "or:\tjava Byzantine_Main multi  <n> <f>      [<omission|random|both>]");
+        System.err.println("usage:\tjava Byzantine_Main single <n> <f> <id> [<" + str + ">]\n" +
+                              "or:\tjava Byzantine_Main multi  <n> <f>      [<" + str + ">]");
     }
 
     static void startByzantine(int n, int f, List<String> addrs, int i, Byzantine.FailureType type) {
@@ -40,8 +44,10 @@ public class Byzantine_Main {
         Byzantine.FailureType type;
         if (str.compareToIgnoreCase(Byzantine.FailureType.OMISSION.toString()) == 0) {
             type = Byzantine.FailureType.OMISSION;
-        } else if (str.compareToIgnoreCase(Byzantine.FailureType.RANDOM.toString()) == 0) {
-            type = Byzantine.FailureType.RANDOM;
+        } else if (str.compareToIgnoreCase(Byzantine.FailureType.RANDOM_SIMPLE.toString()) == 0) {
+            type = Byzantine.FailureType.RANDOM_SIMPLE;
+        } else if (str.compareToIgnoreCase(Byzantine.FailureType.RANDOM_COMPLEX.toString()) == 0) {
+            type = Byzantine.FailureType.RANDOM_COMPLEX;
         } else if (str.compareToIgnoreCase(Byzantine.FailureType.BOTH.toString()) == 0) {
             type = Byzantine.FailureType.BOTH;
         } else {

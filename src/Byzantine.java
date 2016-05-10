@@ -34,8 +34,9 @@ public class Byzantine
     public enum FailureType {
         NOFAILURE,
         OMISSION,
-        RANDOM,
-        BOTH
+        RANDOM_SIMPLE, // broadcast the same random value to all nodes
+        RANDOM_COMPLEX, // different random values are sent to individual nodes
+        BOTH // omit message half of the time and use RANDOM_COMPLEX when sending messages
     }
 
     static class Tuple<X, Y> {
@@ -82,20 +83,20 @@ public class Byzantine
             /* NOTIFICATION PHASE */
 
             if (type == FailureType.OMISSION) {
-                // do nothing
 
-            } else if (type == FailureType.RANDOM) {
-                // broadcast random value
-                bcast(MsgType.NOTIFICA, round, rn.nextInt(2));
+            } else if (type == FailureType.RANDOM_SIMPLE) {
+                bcast(MsgType.NOTIFICA, rn.nextInt(2));
+
+            } else if (type == FailureType.RANDOM_COMPLEX) {
+                randBcast(MsgType.NOTIFICA, rn);
 
             } else if (type == FailureType.BOTH) {
-                // broadcast random value half of the time
                 if (rn.nextInt(2) == 0)
-                    bcast(MsgType.NOTIFICA, round, rn.nextInt(2));
+                    randBcast(MsgType.NOTIFICA, rn);
 
             } else {
                 // operate usually
-                bcast(MsgType.NOTIFICA, round, v);
+                bcast(MsgType.NOTIFICA, v);
             }
 
             // await n - f messages in the form of (N, r, *)
@@ -115,23 +116,23 @@ public class Byzantine
             }
 
             if (type == FailureType.OMISSION) {
-                // do nothing
 
-            } else if (type == FailureType.RANDOM) {
-                // broadcast random value
-                bcast(MsgType.PROPOSAL, round, rn.nextInt(3) - 1);
+            } else if (type == FailureType.RANDOM_SIMPLE) {
+                bcast(MsgType.PROPOSAL, rn.nextInt(2));
+
+            } else if (type == FailureType.RANDOM_COMPLEX) {
+                randBcast(MsgType.PROPOSAL, rn);
 
             } else if (type == FailureType.BOTH) {
-                // broadcast random value half of the time
                 if (rn.nextInt(2) == 0)
-                    bcast(MsgType.PROPOSAL, round, rn.nextInt(3) - 1);
+                    randBcast(MsgType.NOTIFICA, rn);
 
             } else {
                 // operate usually
                 if (proposalRes.tally > (n + f) / 2) {
-                    bcast(MsgType.PROPOSAL, round, proposalRes.maj);
+                    bcast(MsgType.PROPOSAL, proposalRes.maj);
                 } else {
-                    bcast(MsgType.PROPOSAL, round, -1);
+                    bcast(MsgType.PROPOSAL, -1);
                 }
             }
 
@@ -189,12 +190,25 @@ public class Byzantine
         }
     }
 
-    private void bcast(MsgType type, int r, int w)
+    private void bcast(MsgType type, int w)
             throws RemoteException, MalformedURLException {
-        System.out.printf("%d -> (Send %s, r: %4d, w: %4d)\n", id, type.toString(), r, w);
+        System.out.printf("%d -> (Send %s, r: %4d, w: %4d)\n", id, type.toString(), round, w);
         for (String addr : addrs) {
             try {
-                send(type, addr, r, w);
+                send(type, addr, round, w);
+            } catch (NotBoundException e) {
+                System.err.printf("Sending failed on %s\n", addr);
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void randBcast(MsgType type, Random rn)
+            throws RemoteException, MalformedURLException {
+        System.out.printf("%d -> (Send %s, r: %4d, w: random)\n", id, type.toString(), round);
+        for (String addr : addrs) {
+            try {
+                send(type, addr, round, rn.nextInt(2));
             } catch (NotBoundException e) {
                 System.err.printf("Sending failed on %s\n", addr);
                 e.printStackTrace();
