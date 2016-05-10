@@ -1,6 +1,8 @@
 import java.net.MalformedURLException;
 import java.rmi.Naming;
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,10 +20,12 @@ public class Byzantine_Main {
     }
 
     static void usage() {
-        String str = Byzantine.FailureType.OMISSION.toString() + "|"
-                + Byzantine.FailureType.RANDOM_SIMPLE.toString() + "|"
-                + Byzantine.FailureType.RANDOM_COMPLEX.toString() + "|"
-                + Byzantine.FailureType.BOTH.toString();
+        String str = "";
+        for (Byzantine.FailureType t : Byzantine.FailureType.values()) {
+            str += t.toString() + "|";
+        }
+        str = str.substring(0, str.length() - 1); // remove the last "|" character
+
         System.err.println("Invalid argument!");
         System.err.println("usage:\tjava Byzantine_Main single <n> <f> <id> [<" + str + ">]\n" +
                               "or:\tjava Byzantine_Main multi  <n> <f>      [<" + str + ">]");
@@ -34,6 +38,15 @@ public class Byzantine_Main {
             Naming.rebind(addrs.get(i), byz);
             Thread.sleep(100); // wait for other nodes to come online
             byz.run();
+            Thread.sleep(100);
+            try {
+                Naming.unbind(addrs.get(i));
+                UnicastRemoteObject.unexportObject(byz, false);
+            } catch (NotBoundException e) {
+                // this shouldn't happen
+                System.err.println("Failure!");
+                e.printStackTrace();
+            }
         } catch (RemoteException | MalformedURLException | InterruptedException e) {
             System.err.println("Failure!");
             e.printStackTrace();
@@ -41,20 +54,11 @@ public class Byzantine_Main {
     }
 
     static Byzantine.FailureType parseFailureType(String str) {
-        Byzantine.FailureType type;
-        if (str.compareToIgnoreCase(Byzantine.FailureType.OMISSION.toString()) == 0) {
-            type = Byzantine.FailureType.OMISSION;
-        } else if (str.compareToIgnoreCase(Byzantine.FailureType.RANDOM_SIMPLE.toString()) == 0) {
-            type = Byzantine.FailureType.RANDOM_SIMPLE;
-        } else if (str.compareToIgnoreCase(Byzantine.FailureType.RANDOM_COMPLEX.toString()) == 0) {
-            type = Byzantine.FailureType.RANDOM_COMPLEX;
-        } else if (str.compareToIgnoreCase(Byzantine.FailureType.BOTH.toString()) == 0) {
-            type = Byzantine.FailureType.BOTH;
-        } else {
-            type = Byzantine.FailureType.NOFAILURE;
-            System.out.println("Invalid failure type, defaulting to NOFAILURE.");
+        Byzantine.FailureType type = Byzantine.FailureType.NOFAILURE;
+        for (Byzantine.FailureType t : Byzantine.FailureType.values()) {
+            if (str.compareToIgnoreCase(t.toString()) == 0)
+                type = t;
         }
-
         return type;
     }
 
@@ -92,11 +96,13 @@ public class Byzantine_Main {
             else
                 type = Byzantine.FailureType.NOFAILURE;
 
+            Thread threads[] = new Thread[n];
             for (int i = 0; i < n; i++) {
                 final int I = i;
                 final Byzantine.FailureType Type = i < f ? type : Byzantine.FailureType.NOFAILURE;
                 Runnable task = () -> startByzantine(n, f, addrs, I, Type);
-                new Thread(task).start();
+                threads[i] = new Thread(task);
+                threads[i].start();
             }
 
         } catch (NumberFormatException e) {

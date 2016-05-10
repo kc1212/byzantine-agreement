@@ -228,11 +228,11 @@ public class Byzantine
     }
 
     private void decide(int w) {
-        System.out.printf("%s>>> Node %d DECIDED on %d in round %d<<<%s\n", ANSI_RED, id, w, round, ANSI_RESET);
+        System.out.printf("%s>>> Node %d DECIDED on %d in round %d <<<%s\n", ANSI_RED, id, w, round, ANSI_RESET);
     }
 
     private static List<Tuple<Integer, Integer>> filterMsgList(List<Tuple<Integer, Integer>> msgs, Integer r) {
-        return msgs.stream().filter(p -> p.r != r).collect(Collectors.toList());
+        return msgs.stream().filter(p -> !p.r.equals(r)).collect(Collectors.toList());
     }
 
     private static MajTally getMajTally(List<Tuple<Integer, Integer>> wrs, Integer r) {
