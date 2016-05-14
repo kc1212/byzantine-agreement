@@ -19,8 +19,7 @@ public class Byzantine
     private int round;
     private boolean decided;
     private int v;
-    private List<Tuple<Integer, Integer>> msgsN;
-    private List<Tuple<Integer, Integer>> msgsP;
+    private List<Triple<MsgType, Integer, Integer>> msgs;
 
     private final int id, n, f;
     private final List<String> addrs;
@@ -39,10 +38,12 @@ public class Byzantine
         BOTH // omit message half of the time and use RANDOM_COMPLEX when sending messages
     }
 
-    static class Tuple<X, Y> {
-        public final X r;
-        public final Y w;
-        public Tuple(X r, Y w) {
+    static class Triple<X, Y, Z> {
+        public final X t;
+        public final Y r;
+        public final Z w;
+        public Triple(X t, Y r, Z w) {
+            this.t = t;
             this.r = r;
             this.w = w;
         }
@@ -57,16 +58,15 @@ public class Byzantine
         }
     }
 
-    public Byzantine(int id, int n, int f, int v, List<String> _addrs, FailureType type) throws RemoteException {
-        round = 0;
-        decided = false;
+    public Byzantine(int id, int n, int f, int v, List<String> addrs, FailureType type) throws RemoteException {
+        this.round = 0;
+        this.decided = false;
         this.id = id;
         this.n = n;
         this.f = f;
         this.v = v;
-        addrs = new ArrayList<>(_addrs);
-        msgsN = new ArrayList<>();
-        msgsP = new ArrayList<>();
+        this.addrs = new ArrayList<>(addrs);
+        this.msgs = new ArrayList<>();
         this.type = type;
 
         assert addrs.size() == n;
@@ -77,8 +77,8 @@ public class Byzantine
             throws RemoteException, MalformedURLException, InterruptedException {
         Random rn = new Random();
         for (;;) {
-            // artificial delay up to 100 ms
-            Thread.sleep(rn.nextInt(100));
+            // artificial delay up to 1s
+            Thread.sleep(rn.nextInt(1000));
 
             /* NOTIFICATION PHASE */
 
@@ -99,20 +99,13 @@ public class Byzantine
                 bcast(MsgType.NOTIFICA, v);
             }
 
-            // await n - f messages in the form of (N, r, *)
-            while (true) {
-                synchronized (msgsN) {
-                    if (msgsN.stream().filter(p -> p.r == round).count() >= n - f)
-                        break;
-                }
-                Thread.sleep(100);
-            }
+            await(MsgType.NOTIFICA);
 
             /* PROPOSAL PHASE */
             MajTally proposalRes;
-            synchronized (msgsN) {
-                printBufferSize(MsgType.NOTIFICA, msgsN);
-                proposalRes = getMajTally(msgsN, round);
+            synchronized (msgs) {
+                printBufferSize(MsgType.NOTIFICA);
+                proposalRes = getMajTally(msgs, MsgType.NOTIFICA, round);
             }
 
             if (type == FailureType.OMISSION) {
@@ -139,27 +132,20 @@ public class Byzantine
             if (decided)
                 break;
 
-            // await n - f messages in the form of (P, r, *)
-            while (true) {
-                synchronized (msgsP) {
-                    if (msgsP.stream().filter(p -> p.r == round).count() >= n - f)
-                        break;
-                }
-                Thread.sleep(100);
-            }
+            await(MsgType.PROPOSAL);
 
             /* DECISION PHASE */
 
             MajTally decisionRes;
-            synchronized (msgsP) {
-                printBufferSize(MsgType.PROPOSAL, msgsP);
-                decisionRes = getMajTally(msgsP, round);
+            synchronized (msgs) {
+                printBufferSize(MsgType.PROPOSAL);
+                decisionRes = getMajTally(msgs, MsgType.PROPOSAL, round);
             }
 
             if (decisionRes.tally > f) {
                 v = decisionRes.maj;
                 if (decisionRes.tally > 3*f) {
-                    decide(v);
+                    decide();
                     decided = true;
                 }
             } else {
@@ -171,27 +157,28 @@ public class Byzantine
         }
     }
 
-    private void printBufferSize(MsgType type, List<Tuple<Integer, Integer>> msgs) {
-        long cnt = msgs.stream().filter(p -> p.r == round).count();
+    private void await(MsgType type) throws InterruptedException {
+        while (true) {
+            synchronized (msgs) {
+                if (msgs.stream().filter(p -> p.t == type && p.r == round).count() >= n - f)
+                    break;
+            }
+            Thread.sleep(100);
+        }
+    }
+
+    private void printBufferSize(MsgType type) {
+        long cnt = msgs.stream().filter(p -> p.t == type && p.r == round).count();
         System.out.printf("%s%d -> (Recv %s, r: %4d, n: %4d)%s\n", ANSI_GREEN, id, type.toString(), round, cnt, ANSI_RESET);
     }
 
     public void handleMsg(MsgType type, int r, int w) throws RemoteException {
-        if (type == MsgType.NOTIFICA) {
-            synchronized (msgsN) {
-                msgsN.add(new Tuple<>(r, w));
-            }
-        } else if (type == MsgType.PROPOSAL) {
-            synchronized (msgsP) {
-                msgsP.add(new Tuple<>(r, w));
-            }
-        } else {
-            throw new RemoteException("Invalid Msg Type!");
+        synchronized (msgs) {
+            msgs.add(new Triple<>(type, r, w));
         }
     }
 
-    private void bcast(MsgType type, int w)
-            throws RemoteException, MalformedURLException {
+    private void bcast(MsgType type, int w) throws RemoteException, MalformedURLException {
         System.out.printf("%d -> (Send %s, r: %4d, w: %4d)\n", id, type.toString(), round, w);
         for (String addr : addrs) {
             try {
@@ -203,8 +190,7 @@ public class Byzantine
         }
     }
 
-    private void randBcast(MsgType type, Random rn)
-            throws RemoteException, MalformedURLException {
+    private void randBcast(MsgType type, Random rn) throws RemoteException, MalformedURLException {
         System.out.printf("%d -> (Send %s, r: %4d, w: random)\n", id, type.toString(), round);
         for (String addr : addrs) {
             try {
@@ -222,22 +208,19 @@ public class Byzantine
         remote.handleMsg(type, r, w);
     }
 
-    private synchronized void prepareNewRound() {
-        msgsN = filterMsgList(msgsN, round);
-        msgsP = filterMsgList(msgsP, round);
+    private void prepareNewRound() {
+        synchronized (msgs) {
+            msgs = msgs.stream().filter(p -> !p.r.equals(round)).collect(Collectors.toList());
+        }
     }
 
-    private void decide(int w) {
-        System.out.printf("%s>>> Node %d DECIDED on %d in round %d <<<%s\n", ANSI_RED, id, w, round, ANSI_RESET);
+    private void decide() {
+        System.out.printf("%s>>> Node %d DECIDED on %d in round %d <<<%s\n", ANSI_RED, id, v, round, ANSI_RESET);
     }
 
-    private static List<Tuple<Integer, Integer>> filterMsgList(List<Tuple<Integer, Integer>> msgs, Integer r) {
-        return msgs.stream().filter(p -> !p.r.equals(r)).collect(Collectors.toList());
-    }
-
-    private static MajTally getMajTally(List<Tuple<Integer, Integer>> wrs, Integer r) {
-        long tally0 = getTallyOf(wrs, 0, r);
-        long tally1 = getTallyOf(wrs, 1, r);
+    private static MajTally getMajTally(List<Triple<MsgType, Integer, Integer>> triple, MsgType type, Integer r) {
+        long tally0 = getTallyOf(triple, type, 0, r);
+        long tally1 = getTallyOf(triple, type, 1, r);
 
         int maj = 0;
         long tally = tally0;
@@ -249,7 +232,7 @@ public class Byzantine
         return new MajTally(maj, tally);
     }
 
-    private static long getTallyOf(List<Tuple<Integer, Integer>> wrs, Integer w, Integer r) {
-        return wrs.stream().filter(p -> p.w == w && p.r == r).count();
+    private static long getTallyOf(List<Triple<MsgType, Integer, Integer>> triple, MsgType type, Integer w, Integer r) {
+        return triple.stream().filter(p -> p.t == type && p.w == w && p.r == r).count();
     }
 }

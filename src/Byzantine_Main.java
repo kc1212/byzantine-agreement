@@ -36,9 +36,9 @@ public class Byzantine_Main {
             int v = (new Random()).nextInt(2);
             Byzantine byz = new Byzantine(i, n, f, v, addrs, type);
             Naming.rebind(addrs.get(i), byz);
-            Thread.sleep(100); // wait for other nodes to come online
+            Thread.sleep(1000); // wait for other nodes to come online
             byz.run();
-            Thread.sleep(100);
+            Thread.sleep(1000); // wait for all other nodes to finish the final round
             try {
                 Naming.unbind(addrs.get(i));
                 UnicastRemoteObject.unexportObject(byz, false);
