@@ -6,15 +6,14 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.stream.Collectors;
 
 public class Byzantine
         extends UnicastRemoteObject
         implements Byzantine_RMI {
 
-    public static final String ANSI_RESET = "\u001B[0m";
-    public static final String ANSI_RED = "\u001B[31m";
-    public static final String ANSI_GREEN = "\u001B[32m";
+    private static final String ANSI_RESET = "\u001B[0m";
+    private static final String ANSI_RED = "\u001B[31m";
+    private static final String ANSI_GREEN = "\u001B[32m";
 
     private int round;
     private boolean decided;
@@ -38,27 +37,28 @@ public class Byzantine
         BOTH // omit message half of the time and use RANDOM_COMPLEX when sending messages
     }
 
-    static class Triple<X, Y, Z> {
+    static final class Triple<X, Y, Z> {
         public final X t;
         public final Y r;
         public final Z w;
-        public Triple(X t, Y r, Z w) {
+        private Triple(X t, Y r, Z w) {
             this.t = t;
             this.r = r;
             this.w = w;
         }
     }
 
-    static class MajTally {
+    static final class MajTally {
         public final int maj;
         public final long tally;
-        public MajTally(int maj, long tally) {
+        private MajTally(int maj, long tally) {
             this.maj = maj;
             this.tally = tally;
         }
     }
 
-    public Byzantine(int id, int n, int f, int v, List<String> addrs, FailureType type) throws RemoteException {
+    public Byzantine(int id, int n, int f, int v, List<String> addrs, FailureType type)
+            throws RemoteException {
         this.round = 0;
         this.decided = false;
         this.id = id;
@@ -77,8 +77,9 @@ public class Byzantine
             throws RemoteException, MalformedURLException, InterruptedException {
         Random rn = new Random();
         for (;;) {
-            // artificial delay up to 1s
-            Thread.sleep(rn.nextInt(1000));
+            // artificial delay up to 100ms
+            Thread.sleep(rn.nextInt(100));
+            prepareNewRound();
 
             /* NOTIFICATION PHASE */
 
@@ -152,7 +153,6 @@ public class Byzantine
                 v = rn.nextInt(2);
             }
 
-            prepareNewRound();
             round++;
         }
     }
@@ -178,7 +178,8 @@ public class Byzantine
         }
     }
 
-    private void bcast(MsgType type, int w) throws RemoteException, MalformedURLException {
+    private void bcast(MsgType type, int w)
+            throws RemoteException, MalformedURLException {
         System.out.printf("%d -> (Send %s, r: %4d, w: %4d)\n", id, type.toString(), round, w);
         for (String addr : addrs) {
             try {
@@ -190,7 +191,8 @@ public class Byzantine
         }
     }
 
-    private void randBcast(MsgType type, Random rn) throws RemoteException, MalformedURLException {
+    private void randBcast(MsgType type, Random rn)
+            throws RemoteException, MalformedURLException {
         System.out.printf("%d -> (Send %s, r: %4d, w: random)\n", id, type.toString(), round);
         for (String addr : addrs) {
             try {
@@ -210,7 +212,7 @@ public class Byzantine
 
     private void prepareNewRound() {
         synchronized (msgs) {
-            msgs = msgs.stream().filter(p -> !p.r.equals(round)).collect(Collectors.toList());
+            msgs.removeIf(p -> p.r < round);
         }
     }
 
