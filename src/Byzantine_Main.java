@@ -1,23 +1,12 @@
 import java.net.MalformedURLException;
-import java.rmi.Naming;
-import java.rmi.NotBoundException;
+import java.rmi.AlreadyBoundException;
 import java.rmi.RemoteException;
-import java.rmi.server.UnicastRemoteObject;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Random;
 
 public class Byzantine_Main {
 
-    static List<String> makeAddrs(int n) {
-        List<String> addrs = new ArrayList<>();
-        final String RMI_PREFIX = "rmi://localhost:1099/byz-";
-        for (int i = 0; i < n; i++) {
-            addrs.add(RMI_PREFIX + i);
-        }
-        return addrs;
-    }
+    final static int PORT_NUMBER = 1099;
 
     static void usage() {
         String str = "";
@@ -31,23 +20,12 @@ public class Byzantine_Main {
                               "or:\tjava Byzantine_Main multi  <n> <f>      [<" + str + ">]");
     }
 
-    static void startByzantine(int n, int f, List<String> addrs, int i, Byzantine.FailureType type) {
+    static void startByzantine(int n, int f, int i, Byzantine.FailureType type, int port) {
         try {
             int v = (new Random()).nextInt(2);
-            Byzantine byz = new Byzantine(i, n, f, v, addrs, type);
-            Naming.rebind(addrs.get(i), byz);
-            Thread.sleep(1000); // wait for other nodes to come online
+            Byzantine byz = new Byzantine(i, n, f, v, type, port);
             byz.run();
-            Thread.sleep(1000); // wait for all other nodes to finish the final round
-            try {
-                Naming.unbind(addrs.get(i));
-                UnicastRemoteObject.unexportObject(byz, false);
-            } catch (NotBoundException e) {
-                // this shouldn't happen
-                System.err.println("Failure!");
-                e.printStackTrace();
-            }
-        } catch (RemoteException | MalformedURLException | InterruptedException e) {
+        } catch (RemoteException | MalformedURLException | InterruptedException | AlreadyBoundException e) {
             System.err.println("Failure!");
             e.printStackTrace();
         }
@@ -66,7 +44,6 @@ public class Byzantine_Main {
         try {
             int n = Integer.parseInt(args[0]);
             int f = Integer.parseInt(args[1]);
-            List<String> addrs = makeAddrs(n);
             int i = Integer.parseInt(args[2]);
 
             Byzantine.FailureType type;
@@ -75,7 +52,7 @@ public class Byzantine_Main {
             else
                 type = Byzantine.FailureType.NOFAILURE;
 
-            startByzantine(n, f, addrs, i, type);
+            startByzantine(n, f, i, type, PORT_NUMBER);
 
         } catch (NumberFormatException e) {
             e.printStackTrace();
@@ -88,7 +65,6 @@ public class Byzantine_Main {
         try {
             int n = Integer.parseInt(args[0]);
             int f = Integer.parseInt(args[1]);
-            List<String> addrs = makeAddrs(n);
 
             Byzantine.FailureType type;
             if (args.length >= 3)
@@ -100,7 +76,7 @@ public class Byzantine_Main {
             for (int i = 0; i < n; i++) {
                 final int I = i;
                 final Byzantine.FailureType Type = i < f ? type : Byzantine.FailureType.NOFAILURE;
-                Runnable task = () -> startByzantine(n, f, addrs, I, Type);
+                Runnable task = () -> startByzantine(n, f, I, Type, PORT_NUMBER);
                 threads[i] = new Thread(task);
                 threads[i].start();
             }

@@ -1,7 +1,7 @@
 import java.net.MalformedURLException;
-import java.rmi.Naming;
-import java.rmi.NotBoundException;
-import java.rmi.RemoteException;
+import java.rmi.*;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,8 +21,8 @@ public class Byzantine
     private List<Triple<MsgType, Integer, Integer>> msgs;
 
     private final int id, n, f;
-    private final List<String> addrs;
     private final FailureType type;
+    private final Registry registry;
 
     public enum MsgType {
         NOTIFICA,
@@ -57,24 +57,27 @@ public class Byzantine
         }
     }
 
-    public Byzantine(int id, int n, int f, int v, List<String> addrs, FailureType type)
-            throws RemoteException {
+    public Byzantine(int id, int n, int f, int v, FailureType type, int portNumber)
+            throws RemoteException, AlreadyBoundException {
         this.round = 0;
         this.decided = false;
         this.id = id;
         this.n = n;
         this.f = f;
         this.v = v;
-        this.addrs = new ArrayList<>(addrs);
         this.msgs = new ArrayList<>();
         this.type = type;
+        this.registry = LocateRegistry.getRegistry(portNumber);
 
-        assert addrs.size() == n;
+        registry.bind(Integer.toString(id), this);
         System.out.printf("%d initiated with v = %d, type = %s\n", id, v, type.toString());
     }
 
     public void run()
             throws RemoteException, MalformedURLException, InterruptedException {
+
+        waitForNodesToJoin();
+
         Random rn = new Random();
         for (;;) {
             // artificial delay up to 100ms
@@ -155,6 +158,7 @@ public class Byzantine
 
             round++;
         }
+        tidyup();
     }
 
     private void await(MsgType type) throws InterruptedException {
@@ -178,10 +182,9 @@ public class Byzantine
         }
     }
 
-    private void bcast(MsgType type, int w)
-            throws RemoteException, MalformedURLException {
+    private void bcast(MsgType type, int w) throws RemoteException, MalformedURLException {
         System.out.printf("%d -> (Send %s, r: %4d, w: %4d)\n", id, type.toString(), round, w);
-        for (String addr : addrs) {
+        for (String addr : this.registry.list()) {
             try {
                 send(type, addr, round, w);
             } catch (NotBoundException e) {
@@ -191,10 +194,9 @@ public class Byzantine
         }
     }
 
-    private void randBcast(MsgType type, Random rn)
-            throws RemoteException, MalformedURLException {
+    private void randBcast(MsgType type, Random rn) throws RemoteException, MalformedURLException {
         System.out.printf("%d -> (Send %s, r: %4d, w: random)\n", id, type.toString(), round);
-        for (String addr : addrs) {
+        for (String addr : this.registry.list()) {
             try {
                 send(type, addr, round, rn.nextInt(2));
             } catch (NotBoundException e) {
@@ -204,9 +206,9 @@ public class Byzantine
         }
     }
 
-    private static void send(MsgType type, String dest, int r, int w)
+    private void send(MsgType type, String dest, int r, int w)
             throws RemoteException, MalformedURLException, NotBoundException {
-        Byzantine_RMI remote = (Byzantine_RMI) Naming.lookup(dest);
+        Byzantine_RMI remote = (Byzantine_RMI) registry.lookup(dest);
         remote.handleMsg(type, r, w);
     }
 
@@ -218,6 +220,24 @@ public class Byzantine
 
     private void decide() {
         System.out.printf("%s>>> Node %d DECIDED on %d in round %d <<<%s\n", ANSI_RED, id, v, round, ANSI_RESET);
+    }
+
+    private void tidyup() throws InterruptedException {
+        Thread.sleep(2000); // wait for all other nodes to finish the final round
+        try {
+            registry.unbind(Integer.toString(id));
+            UnicastRemoteObject.unexportObject(this, false);
+        } catch (NotBoundException | RemoteException e) {
+            System.err.println("Should not happen!");
+            e.printStackTrace();
+        }
+    }
+
+    private void waitForNodesToJoin() throws InterruptedException, RemoteException {
+        while (registry.list().length < n) {
+            System.out.println(registry.list().length + " nodes in the registry, need " + n);
+            Thread.sleep(1000);
+        }
     }
 
     private static MajTally getMajTally(List<Triple<MsgType, Integer, Integer>> triple, MsgType type, Integer r) {
