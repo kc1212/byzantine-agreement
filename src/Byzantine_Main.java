@@ -30,14 +30,19 @@ public class Byzantine_Main {
     @Parameter(names = "-h", help = true, description = "prints this message")
     private boolean help;
 
+    @Parameter(names = "-v", description = "the initial value, this will be interpreted as the number of ones when running in MULTI")
+    private Integer v = null;
+
     enum Mode {
         SINGLE,
         MULTI
     }
 
-    static void startByzantine(int n, int f, int i, Byzantine.FailureType type, int port) {
+    static void startByzantine(int n, int f, int i, Integer v, Byzantine.FailureType type, int port) {
         try {
-            int v = (new Random()).nextInt(2);
+            if (v  == null || (v != 0 && v != 1)) {
+                v = (new Random()).nextInt(2);
+            }
             Byzantine byz = new Byzantine(i, n, f, v, type, port);
             byz.run();
         } catch (RemoteException | MalformedURLException | InterruptedException | AlreadyBoundException e) {
@@ -50,7 +55,7 @@ public class Byzantine_Main {
         if (id == null) {
             throw new ParameterException("The following options are required: -i is required for single mode");
         }
-        startByzantine(n, f, id, type, port_number);
+        startByzantine(n, f, id, v, type, port_number);
     }
 
     void handleMulti() {
@@ -58,7 +63,15 @@ public class Byzantine_Main {
         for (int i = 0; i < n; i++) {
             final int I = i;
             final Byzantine.FailureType Type = i < f ? type : Byzantine.FailureType.NOFAILURE;
-            Runnable task = () -> startByzantine(n, f, I, Type, port_number);
+
+            final Integer V;
+            if (v == null) {
+                V = null;
+            } else {
+                V = i < v ? 1 : 0;
+            }
+
+            Runnable task = () -> startByzantine(n, f, I, V, Type, port_number);
             threads[i] = new Thread(task);
             threads[i].start();
         }
@@ -69,8 +82,8 @@ public class Byzantine_Main {
             handleMulti();
         else if (mode == Mode.SINGLE)
             handleSingle();
-
-        throw new InternalError("Unhandled mode");
+        else
+            throw new InternalError("Unhandled mode");
     }
 
     public static void main(String args[]) {
