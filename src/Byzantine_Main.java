@@ -1,23 +1,38 @@
 import java.net.MalformedURLException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.RemoteException;
-import java.util.Arrays;
 import java.util.Random;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParameterException;
 
 public class Byzantine_Main {
 
-    final static int PORT_NUMBER = 1099;
+    @Parameter(names = "-p", description = "the RMI port number to use")
+    private Integer port_number = 1099;
 
-    static void usage() {
-        String str = "";
-        for (Byzantine.FailureType t : Byzantine.FailureType.values()) {
-            str += t.toString() + "|";
-        }
-        str = str.substring(0, str.length() - 1); // remove the last "|" character
+    @Parameter(names = "-m", description = "the mode to use")
+    private Mode mode = Mode.MULTI;
 
-        System.err.println("Invalid argument!");
-        System.err.println("usage:\tjava Byzantine_Main single <n> <f> <id> [<" + str + ">]\n" +
-                              "or:\tjava Byzantine_Main multi  <n> <f>      [<" + str + ">]");
+    @Parameter(names = "-n", required = true, description = "the total number of nodes")
+    private Integer n;
+
+    @Parameter(names = "-f", required = true, description = "the number of faulty nodes")
+    private Integer f;
+
+    @Parameter(names = "-i", description = "the id of the node (only in single mode)")
+    private Integer id = null;
+
+    @Parameter(names = "-t", description = "the failure type")
+    private Byzantine.FailureType type = Byzantine.FailureType.NOFAILURE;
+
+    @Parameter(names = "-h", help = true, description = "prints this message")
+    private boolean help;
+
+    enum Mode {
+        SINGLE,
+        MULTI
     }
 
     static void startByzantine(int n, int f, int i, Byzantine.FailureType type, int port) {
@@ -31,80 +46,42 @@ public class Byzantine_Main {
         }
     }
 
-    static Byzantine.FailureType parseFailureType(String str) {
-        Byzantine.FailureType type = Byzantine.FailureType.NOFAILURE;
-        for (Byzantine.FailureType t : Byzantine.FailureType.values()) {
-            if (str.compareToIgnoreCase(t.toString()) == 0)
-                type = t;
+    void handleSingle() {
+        if (id == null) {
+            throw new ParameterException("The following options are required: -i is required for single mode");
         }
-        return type;
+        startByzantine(n, f, id, type, port_number);
     }
 
-    static void handleSingle(String args[]) {
-        try {
-            int n = Integer.parseInt(args[0]);
-            int f = Integer.parseInt(args[1]);
-            int i = Integer.parseInt(args[2]);
-
-            Byzantine.FailureType type;
-            if (args.length >= 4)
-                type = parseFailureType(args[3]);
-            else
-                type = Byzantine.FailureType.NOFAILURE;
-
-            startByzantine(n, f, i, type, PORT_NUMBER);
-
-        } catch (NumberFormatException e) {
-            e.printStackTrace();
-            usage();
-            return;
+    void handleMulti() {
+        Thread threads[] = new Thread[n];
+        for (int i = 0; i < n; i++) {
+            final int I = i;
+            final Byzantine.FailureType Type = i < f ? type : Byzantine.FailureType.NOFAILURE;
+            Runnable task = () -> startByzantine(n, f, I, Type, port_number);
+            threads[i] = new Thread(task);
+            threads[i].start();
         }
     }
 
-    static void handleMulti(String args[]) {
-        try {
-            int n = Integer.parseInt(args[0]);
-            int f = Integer.parseInt(args[1]);
+    public void run() {
+        if (mode == Mode.MULTI)
+            handleMulti();
+        else if (mode == Mode.SINGLE)
+            handleSingle();
 
-            Byzantine.FailureType type;
-            if (args.length >= 3)
-                type = parseFailureType(args[2]);
-            else
-                type = Byzantine.FailureType.NOFAILURE;
-
-            Thread threads[] = new Thread[n];
-            for (int i = 0; i < n; i++) {
-                final int I = i;
-                final Byzantine.FailureType Type = i < f ? type : Byzantine.FailureType.NOFAILURE;
-                Runnable task = () -> startByzantine(n, f, I, Type, PORT_NUMBER);
-                threads[i] = new Thread(task);
-                threads[i].start();
-            }
-
-        } catch (NumberFormatException e) {
-            e.printStackTrace();
-            usage();
-            return;
-        }
-    }
-
-    static String[] pop(String arr[]) {
-        return Arrays.copyOfRange(arr, 1, arr.length);
+        throw new InternalError("Unhandled mode");
     }
 
     public static void main(String args[]) {
-        if (args.length < 3) {
-            usage();
+        Byzantine_Main main = new Byzantine_Main();
+
+        JCommander jc = new JCommander(main, args);
+        if (main.help) {
+            jc.usage();
             return;
         }
 
-        if (args[0].compareToIgnoreCase("multi") == 0) {
-            handleMulti(pop(args));
-        } else if (args[0].compareToIgnoreCase("single") == 0) {
-            handleSingle(pop(args));
-        } else {
-            usage();
-            return;
-        }
+        main.run();
     }
 }
