@@ -3,7 +3,9 @@ byzantine-agreement
 
 We implement the randomised Byzantine agreement protocol proposed by Michael Ben-Or: https://www.cs.utexas.edu/~lorenzo/corsi/cs380d/papers/p27-ben-or.pdf.
 
-The algorithm can be started as follows.
+This project depends on JCommander version 1.48 to build and run.
+
+After building, the algorithm can be started as follows, note that JCommander is included in the classpath.
 ```
 cd ~/code/byzantine-agreement/out/production/byzantine-agreement
 rmiregistry &
